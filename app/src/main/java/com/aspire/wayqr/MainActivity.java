@@ -1,28 +1,36 @@
 package com.aspire.wayqr;
 
 import android.content.Intent;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.support.annotation.StringRes;
 import android.support.annotation.UiThread;
 import android.support.annotation.WorkerThread;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.Toast;
 
+import com.google.ar.core.Anchor;
 import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.AugmentedImageDatabase;
 import com.google.ar.core.Camera;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
+import com.google.ar.core.HitResult;
+import com.google.ar.core.Plane;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
+import com.google.ar.core.TrackingFailureReason;
 import com.google.ar.core.TrackingState;
+import com.google.ar.core.exceptions.CameraNotAvailableException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
@@ -30,9 +38,11 @@ import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.ArSceneView;
 import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.Node;
+import com.google.ar.sceneform.Scene;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.ux.ArFragment;
+import com.google.ar.sceneform.ux.TransformableNode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,205 +51,111 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private int hitTime = 3000;
-
     private ArFragment arFragment;
+    private ModelRenderable sphereRenderable;
+    private static final String INSUFFICIENT_FEATURES_MESSAGE =
+            "Can't find anything. Aim device at a surface with more texture or color.";
+    private static final String EXCESSIVE_MOTION_MESSAGE = "Moving too fast. Slow down.";
+    private static final String INSUFFICIENT_LIGHT_MESSAGE =
+            "Too dark. Try moving to a well-lit area.";
+    private static final String BAD_STATE_MESSAGE =
+            "Tracking lost due to bad internal state. Please try restarting the AR experience.";
 
-    private ModelRenderable arrowRenderable, rightRenderable, leftRenderable,
-            sphereRenderable, marsRenderable, locationRenderable;
+    private Frame arFrame;
     private Session session;
     private Spinner mspinner;
-    int countGo = 1, countRight = 1, countLeft = 1, countSL = 1, countSR = 1;
-    int pathGo = 0, pathRight = 0, pathLeft = 0, pathSL = 0, pathSR = 0;
-    boolean startValue = true, endValue = true, stepsValue = true;
+
+    private Button createBtn;
+    private Button exploreBtn;
     private boolean sessionConfigured = false;
     private static final String TAG = MainActivity.class.getSimpleName();
     private String selectedValue = null;
-    private boolean isRunning = false;
     private boolean isThreadRunning = false;
     private DatabaseHelper mDatabaseHelper;
     private Thread thread = null;
     private String qrValue;
 
-    @UiThread
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        isRunning = false;
-        qrValue = "";
-        isThreadRunning = false;
+        Resources res = getResources();
+        String[] bayNames = res.getStringArray(R.array.bay_array);
         //Adding Spinner
-        String[] arraySpinner = new String[]{"Carina"};
         mspinner = (Spinner) findViewById(R.id.spinner);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_item, arraySpinner);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this
+                 ,android.R.layout.simple_spinner_item,bayNames);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         mspinner.setAdapter(adapter);
         //Getting value form Spinner
         selectedValue = mspinner.getSelectedItem().toString();
+        //Button
+        createBtn = findViewById(R.id.createMap);
+        exploreBtn = findViewById(R.id.exploreMap);
         //Getting AR Fragment
         arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
         mDatabaseHelper = new DatabaseHelper(getApplicationContext());
-        FloatingActionButton fabOne = (FloatingActionButton) findViewById(R.id.fabOne);
-        fabOne.setOnClickListener(new View.OnClickListener() {
+        createBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                isRunning = false;
-                Toast.makeText(getApplicationContext(), "Before QR :" + getQrValue(),
-                        Toast.LENGTH_SHORT).show();
                 arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
             }
 
-            @WorkerThread
             private void onUpdateFrame(FrameTime frameTime) {
-                String str = null;
-//                final String str[] = new String[1];
-//                Thread thread = new Thread(new Runnable() {
-//                    @Override
-//                    public void run() {
-//                        str[0] = MainActivity.this.onUpdateFrame(frameTime);
-//
-//                    }
-//                });
-//                if (qrValue == null) {
-//                    qrValue = MainActivity.this.onUpdateFrame(frameTime);
-//                    Toast.makeText(getApplicationContext(), "After QR :" + qrValue,
-//                            Toast.LENGTH_SHORT).show();
-//                }
-                if (!isRunning) {
-                    if (qrValue.length() == 0) {
-                        str = MainActivity.this.onUpdateFrame(frameTime);
-
-                        if (str != null && qrValue.length() > 0) {
-                            qrValue = str;
-                            arFragment.getArSceneView().getScene().removeOnUpdateListener(this::onUpdateFrame);
-                            isRunning = true;
-                            setQrValue(qrValue);
-                            Toast.makeText(getApplicationContext(), "After QR :" + getQrValue(),
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    } else if (!qrValue.equals(str)) {
-                        if (str != null && qrValue.length() > 0) {
-                            qrValue = str;
-                            arFragment.getArSceneView().getScene().removeOnUpdateListener(this::onUpdateFrame);
-                            isRunning = true;
-                            setQrValue(qrValue);
-                            Toast.makeText(getApplicationContext(), "After QR :" + getQrValue(),
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
+                Config config = session.getConfig();
+                config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
+                try {
+                    arFrame = session.update();
+                } catch (CameraNotAvailableException e) {
+                    e.printStackTrace();
                 }
-//                if (!isRunning) {
-//                    setQrValue(MainActivity.this.onUpdateFrame(frameTime));
-//                    while (getQrValue() != null) {
-//                        if (getQrValue().equals("START")) {
-//                            Toast.makeText(getApplicationContext(), "QR :" + textQR,
-//                                    Toast.LENGTH_SHORT).show();
-//                        }
-//                        if (getQrValue().equals("STEPS")) {
-//                            Toast.makeText(getApplicationContext(), "QR :" + textQR,
-//                                    Toast.LENGTH_SHORT).show();
-//                        }
-//                        if (getQrValue().equals("END")) {
-//                            Toast.makeText(getApplicationContext(), "QR :" + textQR,
-//                                    Toast.LENGTH_SHORT).show();
-//                        }
-//                        createARMap(selectedValue, getQrValue());
-//                    }
-//                }
-            }
-        });
-        FloatingActionButton fabTwo = (FloatingActionButton) findViewById(R.id.fabTwo);
-        fabTwo.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-//                mDatabaseHelper.deleteDemo();
-//                restartProcess();
-                createARMap(selectedValue, getQrValue());
-            }
-        });
-        FloatingActionButton fabThree = (FloatingActionButton) findViewById(R.id.fabThree);
-        fabThree.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (!isThreadRunning) {
-                    isThreadRunning = true;
-                    addLocationPoints(getQrValue());
-                    thread.start();
-                } else {
-                    isThreadRunning = false;
-
-                    thread.interrupt();
-                    runOnUiThread(() -> Toast.makeText(getApplicationContext(),
-                            "Points Fetched", Toast.LENGTH_SHORT).show());
-                    try {
-                        thread.join();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                arFrame = arFragment.getArSceneView().getArFrame();
+                Camera camera = arFrame.getCamera();
+                if (camera.getTrackingState() != TrackingState.TRACKING) {
+                    return;
+                }
+                Collection<AugmentedImage> updateAugmentedImage = arFrame.getUpdatedTrackables
+                        (AugmentedImage.class);
+                for (AugmentedImage image : updateAugmentedImage) {
+                    if (image.getTrackingState() == TrackingState.TRACKING) {
+                        switch (image.getIndex()) {
+                            case 0:
+                                Toast.makeText(getApplicationContext(),
+                                        "" + image.getName(), Toast.LENGTH_SHORT).show();
+                                createMap(selectedValue);
+                                break;
+                            case 1:
+//                                imageView.setVisibility(View.INVISIBLE);
+//                                createAnchorNode(image);
+                                Toast.makeText(getApplicationContext(),
+                                        "" + image.getName(), Toast.LENGTH_SHORT).show();
+                                break;
+                            case 2:
+//                                imageView.setVisibility(View.INVISIBLE);
+                                Toast.makeText(getApplicationContext(),
+                                        "" + image.getName(), Toast.LENGTH_SHORT).show();
+//                                createAnchorNode(image);
+                                break;
+                            case 3:
+//                                imageView.setVisibility(View.INVISIBLE);
+//                                createAnchorNode(image);
+                                break;
+                        }
+                    } else if (camera.getTrackingState() == TrackingState.PAUSED) {
+                        Toast.makeText(getApplicationContext(),
+                                "" + getTrackingFailureReasonString(camera), Toast.LENGTH_SHORT).show();
+                        return;
                     }
                 }
             }
+
         });
-        FloatingActionButton fabFour = (FloatingActionButton) findViewById(R.id.fabFour);
-        fabFour.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-//                mDatabaseHelper.deleteALL();
-                restartProcess();
-//                List<Node> nodesList = arSceneView.getScene().getChildren();
-//                for (Node node : nodesList) {
-//                    if (node.getScene() == arSceneView.getScene()) {
-//                        arSceneView.getScene().removeChild(node);
-//                        node.setRenderable(null);
-//                        try {
-//                            session.update();
-//                        } catch (CameraNotAvailableException e) {
-//                            e.printStackTrace();
-//                        }
-//                    }
-//                }
-            }
-        });
-        //Hiding Plane Detection
-        arFragment.getPlaneDiscoveryController().hide();
-        arFragment.getPlaneDiscoveryController().setInstructionView(null);
-        arFragment.getArSceneView().getPlaneRenderer().setEnabled(false);
-//        ModelRenderable.builder()
-//                .setSource(this, R.raw.modeltriangle)
-//                .build()
-//                .thenAccept(renderable -> arrowRenderable = renderable)
-//                .exceptionally(
-//                        throwable -> {
-//                            Log.e(TAG, "Rendering Failed", throwable);
-//                            return null;
-//                        });
-//        ModelRenderable.builder()
-//                .setSource(this, R.raw.directionalarrow)
-//                .build()
-//                .thenAccept(renderable -> rightRenderable = renderable)
-//                .exceptionally(
-//                        throwable -> {
-//                            Log.e(TAG, "Rendering Failed", throwable);
-//                            return null;
-//                        });
-//        ModelRenderable.builder()
-//                .setSource(this, R.raw.mars)
-//                .build()
-//                .thenAccept(renderable -> marsRenderable = renderable)
-//                .exceptionally(
-//                        throwable -> {
-//                            Log.e(TAG, "Rendering Failed", throwable);
-//                            return null;
-//                        });
-//        ModelRenderable.builder()
-//                .setSource(this, R.raw.leftmodel)
-//                .build()
-//                .thenAccept(renderable -> leftRenderable = renderable)
-//                .exceptionally(
-//                        throwable -> {
-//                            Log.e(TAG, "Rendering Failed", throwable);
-//                            return null;
-//                        });
+
+//        //Hiding Plane Detection
+//        arFragment.getPlaneDiscoveryController().hide();
+//        arFragment.getPlaneDiscoveryController().setInstructionView(null);
+//        arFragment.getArSceneView().getPlaneRenderer().setEnabled(false);
+
         ModelRenderable.builder()
                 .setSource(this, R.raw.model)
                 .build()
@@ -249,15 +165,6 @@ public class MainActivity extends AppCompatActivity {
                             Log.e(TAG, "Rendering Failed", throwable);
                             return null;
                         });
-//        ModelRenderable.builder()
-//                .setSource(this, R.raw.locationmodel)
-//                .build()
-//                .thenAccept(renderable -> locationRenderable = renderable)
-//                .exceptionally(
-//                        throwable -> {
-//                            Log.e(TAG, "Rendering Failed", throwable);
-//                            return null;
-//                        });
     }
 
     public String getQrValue() {
@@ -268,8 +175,44 @@ public class MainActivity extends AppCompatActivity {
         this.qrValue = qrValue;
     }
 
+    public static String getTrackingFailureReasonString(Camera camera) {
+        TrackingFailureReason reason = camera.getTrackingFailureReason();
+        switch (reason) {
+            case NONE:
+                return "";
+            case BAD_STATE:
+                return BAD_STATE_MESSAGE;
+            case INSUFFICIENT_LIGHT:
+                return INSUFFICIENT_LIGHT_MESSAGE;
+            case EXCESSIVE_MOTION:
+                return EXCESSIVE_MOTION_MESSAGE;
+            case INSUFFICIENT_FEATURES:
+                return INSUFFICIENT_FEATURES_MESSAGE;
+        }
+        return "Unknown tracking failure reason: " + reason;
+    }
+
     @WorkerThread
-    private void addLocationPoints(String valueQR) {
+    private void createMap(String valueQR) {
+        arFragment.setOnTapArPlaneListener(
+                (HitResult hitResult, Plane plane, MotionEvent motionevent) -> {
+                    if (sphereRenderable == null) {
+                        return;
+                    }
+
+                    // Create the Anchor.
+                    Anchor anchor = hitResult.createAnchor();
+                    AnchorNode anchorNode = new AnchorNode(anchor);
+                    anchorNode.setParent(arFragment.getArSceneView().getScene());
+
+                    // Create the transformable andy and add it to the anchor.
+                    TransformableNode andy = new TransformableNode(arFragment.getTransformationSystem());
+                    andy.setParent(anchorNode);
+                    andy.setRenderable(sphereRenderable);
+                    andy.select();
+                }
+        );
+
         thread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -306,8 +249,8 @@ public class MainActivity extends AppCompatActivity {
         List<AxisModel> axisModelList = mDatabaseHelper.getCoordinates(locationValue, partValue);
         for (AxisModel axisModel : axisModelList) {
             float x = Float.parseFloat(axisModel.get_xAxis());
-            float y = Float.parseFloat(axisModel.get_yAxis()) - 2f;
-            float z = Float.parseFloat(axisModel.get_zAxis()) - 1f;
+            float y = Float.parseFloat(axisModel.get_yAxis());
+            float z = Float.parseFloat(axisModel.get_zAxis());
             Node node = new Node();
             node.setLocalPosition(new Vector3(x, y, z));
             node.setRenderable(sphereRenderable);
@@ -320,7 +263,7 @@ public class MainActivity extends AppCompatActivity {
         if (xValue == mDatabaseHelper.finalPoint().x) {
             Node node1 = new Node();
             node1.setLocalPosition(mDatabaseHelper.finalPoint());
-            node1.setRenderable(locationRenderable);
+            node1.setRenderable(sphereRenderable);
             node1.setParent(arFragment.getArSceneView().getScene());
         }
     }
@@ -373,221 +316,6 @@ public class MainActivity extends AppCompatActivity {
         return value;
     }
 
-    private String onUpdateFrame(FrameTime frameTime) {
-        session.getConfig().setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
-//        session = arFragment.getArSceneView().getSession();
-        Frame frame = arFragment.getArSceneView().getArFrame();
-        // If there is no frame or ARCore is not tracking yet, just return.
-        if (frame == null || frame.getCamera().getTrackingState() != TrackingState.TRACKING) {
-            return null;
-        }
-        Collection<AugmentedImage> updateAugmentedImage = frame.getUpdatedTrackables
-                (AugmentedImage.class);
-        for (AugmentedImage image : updateAugmentedImage) {
-            if (image.getTrackingState() == TrackingState.TRACKING) {
-                Log.d(">>>>>>>", "$$$$$" + image.getName());
-                if (image.getName().equals("START")) {
-                    return image.getName();
-//                    AnchorNode arNodeStart = new AnchorNode();
-//                    float[] pos = {0, 2, -2};
-//                    float[] rotation = {0, 0, 0, 0};
-//                    arNodeStart.setAnchor(session.createAnchor(new Pose(pos, rotation)));
-//                    arNodeStart.setRenderable(arrowRenderable);
-//                    arNodeStart.setParent(arSceneView.getScene());
-//                    createARMap(image.getName());
-//                        if (countGo == 1) {
-//                            renderingPath(arNodeStart.getAnchor(), arNodeStart);
-//                        }
-                }
-            }
-            if (image.getTrackingState() == TrackingState.TRACKING) {
-                if (image.getName().equals("STEPS")) {
-                    return image.getName();
-//                    AnchorNode arNodeSteps = new AnchorNode();
-//                    float[] pos = {0, 2, -2};
-//                    float[] rotation = {0, 0, 0, 0};
-//                    arNodeSteps.setAnchor(session.createAnchor(new Pose(pos, rotation)));
-//                    arNodeSteps.setRenderable(rightRenderable);
-//                    arNodeSteps.setParent(arSceneView.getScene());
-//                    createARMap(image.getName());
-//                        if (countRight == 1) {
-//                            renderingPath(arNodeSteps.getAnchor(), arNodeSteps);
-//                          }
-                }
-            }
-            if (image.getTrackingState() == TrackingState.TRACKING) {
-                if (image.getName().equals("END")) {
-                    return image.getName();
-//                    AnchorNode arNodeEnd = new AnchorNode();
-//                    float[] pos = {0, 2, -2};
-//                    float[] rotation = {0, 0, 0, 0};
-//                    arNodeEnd.setAnchor(session.createAnchor(new Pose(pos, rotation)));
-//                    arNodeEnd.setRenderable(leftRenderable);
-//                    arNodeEnd.setParent(arSceneView.getScene());
-//                    createARMap(image.getName());
-//                        if (countLeft == 1) {
-//                            renderingPath(arNodeEnd.getAnchor(), arNodeEnd);
-//                        }
-                }
-            }
-//            if (image.getTrackingState() == TrackingState.TRACKING) {
-//                if (image.getName().equals("SL") && slValue) {
-//                    AnchorNode arNodeSL = new AnchorNode();
-//                    if (arNodeSL.getRenderable() != arrowRenderable) {
-//                        arNodeSL.setAnchor(image.createAnchor(image.getCenterPose()));
-//                        arNodeSL.getAnchor().getPose();
-//                        Pose.makeRotation(0, 0, 0, -2);
-//                        arNodeSL.setRenderable(arrowRenderable);
-//                        arNodeSL.setName("Sl");
-//                        arNodeSL.setParent(arSceneView.getScene());
-//                        if (countSL == 1) {
-//                            renderingPath(arNodeSL.getAnchor(), arNodeSL);
-//                        }
-//                    }
-//                }
-//            }
-//            if (image.getTrackingState() == TrackingState.TRACKING) {
-//                if (image.getName().equals("SR") && srValue) {
-//                    AnchorNode arNodeSR = new AnchorNode();
-//                    if (arNodeSR.getRenderable() != arrowRenderable) {
-//                        arNodeSR.setAnchor(image.createAnchor(image.getCenterPose()));
-//                        arNodeSR.getAnchor().getPose();
-//                        Pose.makeRotation(0, 0, 0, -2);
-//                        arNodeSR.setRenderable(arrowRenderable);
-//                        arNodeSR.setName("Sr");
-//                        arNodeSR.setParent(arSceneView.getScene());
-//                        if (countSR == 1) {
-//                            renderingPath(arNodeSR.getAnchor(), arNodeSR);
-//                        }
-//                    }
-//                }
-//            }
-        }
-        return null;
-    }
-//    @WorkerThread
-//    private void renderingPath(Anchor anchor, AnchorNode anchorNode) {
-//        if (anchorNode.getName().equals("Go")) {
-//            countGo = 0;
-//            startValue = false;
-//            Pose poseOne = anchor.getPose();
-//            float x = poseOne.tx();
-//            float y = poseOne.ty();
-//            float z = poseOne.tz() - .5f;
-//            while (pathGo < 15) {
-//                if (TrackingState.TRACKING == anchor.getTrackingState()) {
-//                    AnchorNode anchorNodeGo = new AnchorNode();
-//                    anchorNodeGo.setLocalPosition(new Vector3(x, y, z));
-//                    anchorNodeGo.setRenderable(arrowRenderable);
-//                    anchorNodeGo.setLocalRotation(new Quaternion(0, -2, 0, 2));
-//                    anchorNodeGo.setParent(arSceneView.getScene());
-//                }
-//                ++pathGo;
-//                --z;
-//            }
-//        }
-//        if (anchorNode.getName().equals("Right")) {
-//            countRight = 0;
-//            stepsValue = false;
-//            Pose poseTwo = anchor.getPose();
-//            float x = poseTwo.tx() + .5f;
-//            float y = poseTwo.ty();
-//            float z = poseTwo.tz();
-//            while (pathRight < 2) {
-//                if (TrackingState.TRACKING == anchor.getTrackingState()) {
-//                    AnchorNode anchorNodeRight = new AnchorNode();
-//                    anchorNodeRight.setLocalPosition(new Vector3(x, y, z));
-//                    anchorNodeRight.setRenderable(arrowRenderable);
-//                    anchorNodeRight.setLocalRotation(new Quaternion(0, -2, 0, 0));
-//                    anchorNodeRight.setParent(arSceneView.getScene());
-//                }
-//                ++pathRight;
-//                ++x;
-//            }
-//        }
-//        if (anchorNode.getName().equals("Left")) {
-//            countRight = 0;
-//            endValue = false;
-//            Pose poseL = anchor.getPose();
-//            float x = poseL.tx() - .5f;
-//            float y = poseL.ty();
-//            float z = poseL.tz();
-//            while (pathLeft < 2) {
-//                if (TrackingState.TRACKING == anchor.getTrackingState()) {
-//                    AnchorNode anchorNodeLeft = new AnchorNode();
-//                    anchorNodeLeft.setLocalPosition(new Vector3(x, y, z));
-//                    anchorNodeLeft.setRenderable(arrowRenderable);
-//                    anchorNodeLeft.setLocalRotation(new Quaternion(0, -2, 0, -8));
-//                    anchorNodeLeft.setParent(arSceneView.getScene());
-//                }
-//                ++pathLeft;
-//                --x;
-//            }
-//        }
-//        if (anchorNode.getName().equals("Sl")) {
-//            countSL = 0;
-//            slValue = false;
-//            Pose poseSL = anchor.getPose();
-//            float x = poseSL.tx() - .5f;
-//            float y = poseSL.ty();
-//            float z = poseSL.tz();
-//            float x1 = poseSL.tx();
-//            float y1 = poseSL.ty();
-//            float z1 = poseSL.tz() - .5f;
-//            while (pathSR < 2) {
-//                if (TrackingState.TRACKING == anchor.getTrackingState()) {
-//                    if (selectedValue.equals("Board")) {
-//                        AnchorNode anchorNodeSL = new AnchorNode();
-//                        anchorNodeSL.setLocalPosition(new Vector3(x, y, z));
-//                        anchorNodeSL.setRenderable(arrowRenderable);
-//                        anchorNodeSL.setLocalRotation(new Quaternion(0, -2, 0, -8));
-//                        anchorNodeSL.setParent(arSceneView.getScene());
-//                    } else if (selectedValue.equals("Printer")) {
-//                        AnchorNode anchorNodeSLGo = new AnchorNode();
-//                        anchorNodeSLGo.setLocalPosition(new Vector3(x1, y1, z1));
-//                        anchorNodeSLGo.setRenderable(arrowRenderable);
-//                        anchorNodeSLGo.setLocalRotation(new Quaternion(0, -2, 0, 2));
-//                        anchorNodeSLGo.setParent(arSceneView.getScene());
-//                    }
-//                }
-//                ++pathSR;
-//                --x;
-//                --z1;
-//            }
-//        }
-//        if (anchorNode.getName().equals("Sr")) {
-//            countSR = 0;
-//            srValue = false;
-//            Pose poseSR = anchor.getPose();
-//            float x = poseSR.tx() + .5f;
-//            float y = poseSR.ty();
-//            float z = poseSR.tz();
-//            float x1 = poseSR.tx();
-//            float y1 = poseSR.ty();
-//            float z1 = poseSR.tz() - .5f;
-//            while (pathSL < 2) {
-//                if (TrackingState.TRACKING == anchor.getTrackingState()) {
-//                    if (selectedValue.equals("Board")) {
-//                        AnchorNode anchorNodeSR = new AnchorNode();
-//                        anchorNodeSR.setLocalPosition(new Vector3(x, y, z));
-//                        anchorNodeSR.setRenderable(arrowRenderable);
-//                        anchorNodeSR.setLocalRotation(new Quaternion(0, -2, 0, 0));
-//                        anchorNodeSR.setParent(arSceneView.getScene());
-//                    } else if (selectedValue.equals("Printer")) {
-//                        AnchorNode anchorNodeSRGo = new AnchorNode();
-//                        anchorNodeSRGo.setLocalPosition(new Vector3(x1, y1, z1));
-//                        anchorNodeSRGo.setRenderable(arrowRenderable);
-//                        anchorNodeSRGo.setLocalRotation(new Quaternion(0, -2, 0, 2));
-//                        anchorNodeSRGo.setParent(arSceneView.getScene());
-//                    }
-//                }
-//                ++pathSL;
-//                ++x;
-//                --z1;
-//            }
-//        }
-//    }
-
     private void configureSession() {
         Config config = new Config(session);
         if (!buildAugmentedImageDatabase(config)) {
@@ -596,7 +324,7 @@ public class MainActivity extends AppCompatActivity {
         }
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         session.configure(config);
-//        session.getConfig().setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
+        session.getConfig().setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
     }
 
     @Override
