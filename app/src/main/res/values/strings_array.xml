@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="bay_array">
+        <item>Aries</item>
+        <item>Capella</item>
+        <item>Carina</item>
+        <item>Columba</item>
+        <item>Corvus</item>
+        <item>Draco</item>
+        <item>Dorado</item>
+        <item>Hercules</item>
+        <item>Hydra</item>
+        <item>Indus</item>
+        <item>Libra</item>
+        <item>Lyra</item>
+        <item>Mensa</item>
+        <item>Norma</item>
+        <item>Orion</item>
+        <item>Phoenix</item>
+        <item>Sagitta</item>
+        <item>Scorpius</item>
+        <item>Spica</item>
+        <item>Taurus</item>
+        <item>Vega</item>
+    </string-array>
+</resources>
