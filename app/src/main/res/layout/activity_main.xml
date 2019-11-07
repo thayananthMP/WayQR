@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -7,61 +7,61 @@
     android:orientation="vertical"
     tools:context=".MainActivity">
 
-    <fragment
-        android:id="@+id/ux_fragment"
-        android:name="com.google.ar.sceneform.ux.ArFragment"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        tools:layout_editor_absoluteX="16dp"
-        tools:layout_editor_absoluteY="-55dp" />
-
     <TextView
         android:id="@+id/textView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginTop="104dp"
+        android:layout_marginBottom="574dp"
+        android:gravity="center"
         android:text="@string/search"
         android:textColor="@color/colorAccent"
-        android:textSize="40sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.106"
-        tools:layout_editor_absoluteX="-16dp" />
+        android:textSize="40sp" />
 
     <Spinner
         android:id="@+id/spinner"
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:visibility="visible"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.591"
-        tools:layout_editor_absoluteX="0dp" />
+        android:layout_width="357dp"
+        android:layout_height="53dp"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginStart="27dp"
+        android:layout_marginTop="416dp"
+        android:layout_marginEnd="27dp"
+        android:layout_marginBottom="262dp"
+        android:visibility="invisible" />
 
     <Button
         android:id="@+id/createMap"
         android:layout_width="170dp"
         android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
         android:layout_gravity="center_horizontal"
-        android:text="@string/createMap"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.535"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/ux_fragment"
-        app:layout_constraintVertical_bias="0.282" />
+        android:layout_marginStart="121dp"
+        android:layout_marginTop="226dp"
+        android:layout_marginEnd="120dp"
+        android:layout_marginBottom="458dp"
+        android:text="@string/createMap" />
 
     <Button
         android:id="@+id/exploreMap"
         android:layout_width="170dp"
         android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
         android:layout_gravity="center_horizontal"
-        android:text="@string/exploreMap"
-        app:layout_constraintBottom_toBottomOf="@+id/ux_fragment"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.535"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/ux_fragment"
-        app:layout_constraintVertical_bias="0.407" />
+        android:layout_marginStart="121dp"
+        android:layout_marginTop="325dp"
+        android:layout_marginEnd="120dp"
+        android:layout_marginBottom="358dp"
+        android:text="@string/exploreMap" />
 
-</android.support.constraint.ConstraintLayout>
+</RelativeLayout>
